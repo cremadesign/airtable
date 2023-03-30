@@ -1,0 +1,16 @@
+{
+	"name": "crema/airtable",
+	"description": "PHP wrapper for the Airtable API",
+	"type": "library",
+	"autoload": {
+		"psr-4": {
+			"Crema\\": "src/"
+		}
+	},
+	"authors": [
+		{
+			"name": "Stephen Ginn",
+			"email": "callaginn@users.noreply.github.com"
+		}
+	]
+}
