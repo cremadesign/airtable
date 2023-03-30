@@ -1,6 +1,6 @@
 {
 	"name": "crema/airtable",
-	"version": "v1.0.0",
+	"version": "1.0.0",
 	"description": "PHP wrapper for the Airtable API",
 	"type": "library",
 	"autoload": {
