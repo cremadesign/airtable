@@ -14,6 +14,20 @@
 			}
 		}
 		
+		private function request($url) {
+			if (strpos($_SERVER["HTTP_HOST"], '.test') !== false) {
+				$context = stream_context_create([
+					'ssl' => [
+						'verify_peer' => false
+					]
+				]);
+			
+				return file_get_contents($url, FILE_TEXT, $context);
+			} else {
+				return file_get_contents($url);
+			}
+		}
+		
 		private function slugify($string, $replacement = '-') {
 			$slug = strtolower(preg_replace('/[^A-z0-9-]+/', $replacement, $string));
 			return trim($slug, $replacement);
@@ -67,7 +81,7 @@
 		
 		private function refreshTableCache() {
 			$url = "$this->api/$this->baseId/$this->tableName?api_key=$this->apiKey&view=Grid%20view";
-			$records = json_decode(file_get_contents($url))->records;
+			$records = json_decode($this->request($url))->records;
 			
 			$result = array_map(function($record) {
 				$fields = [];
@@ -89,7 +103,7 @@
 		
 		private function refreshRecordCache() {
 			$url = "$this->api/$this->baseId/$this->tableName/$this->recordId?api_key=$this->apiKey";
-			$record = json_decode(file_get_contents($url));
+			$record = json_decode($this->request($url));
 			
 			$fields = [];
 			
@@ -116,7 +130,7 @@
 				$result = $this->refreshTableCache();
 				file_put_contents($cacheFile, $result);
 			} else {
-				$result = file_get_contents($cacheFile);
+				$result = $this->request($cacheFile);
 			}
 			
 			return json_decode($result, true);

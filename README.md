@@ -7,6 +7,7 @@ exist, it connects to Airtable and saves a new one.
 ### Installation
 You can install the package via composer:
 ```
+composer config repositories.crema/airtable git https://github.com/cremadesign/airtable
 composer require crema/airtable
 ```
 
