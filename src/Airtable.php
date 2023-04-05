@@ -97,8 +97,7 @@
 			}, $records);
 			
 			// Return Records
-			$string = json_encode($result, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES);
-			return str_replace("    ", "\t", $string);
+			return json_encode($result, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES);
 		}
 		
 		private function refreshRecordCache() {
@@ -114,8 +113,7 @@
 			$fields['id'] = $record->id;
 			$fields['created'] = $record->createdTime;
 			
-			$string = json_encode($fields, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES);
-			return str_replace("    ", "\t", $string);
+			return json_encode($fields, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES);
 		}
 		
 		public function getTable($tableName = null) {
@@ -144,7 +142,7 @@
 			$cacheFile = "$this->cacheDir/$this->tableSlug-$this->recordId.json";
 			$fileModified = @filemtime($cacheFile); // returns FALSE if file doesn't exist
 			
-			if (!$fileModified or (time() - $fileModified >= $cacheLife)) {
+			if (!$fileModified or (time() - $fileModified >= $this->cacheLife)) {
 				$result = $this->refreshRecordCache();
 				file_put_contents($cacheFile, $result);
 			} else {
