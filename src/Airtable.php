@@ -146,7 +146,7 @@
 				$result = $this->refreshRecordCache();
 				file_put_contents($cacheFile, $result);
 			} else {
-				$result = readfile($cacheFile);
+				$result = $this->request($cacheFile);
 			}
 			
 			return json_decode($result, true);
