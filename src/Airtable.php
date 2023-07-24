@@ -2,6 +2,9 @@
 
 	namespace Crema;
 	
+	use \AllowDynamicProperties;
+	
+	#[AllowDynamicProperties]
 	class Airtable {
 		public function __construct($credentials) {
 			$this->login($credentials);
