@@ -25,7 +25,7 @@
 					]
 				]);
 			
-				return file_get_contents($url, FILE_TEXT, $context);
+				return file_get_contents($url, false, $context);
 			} else {
 				return file_get_contents($url);
 			}
