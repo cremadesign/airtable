@@ -10,7 +10,7 @@
 			$this->login($credentials);
 			$this->api = "https://api.airtable.com/v0";
 			$this->cacheDir = 'data/.cached';
-			$this->cacheLife = '120'; // in seconds
+			$this->cacheLife = '14400'; // 4 hours (in seconds)
 			
 			if (!is_dir($this->cacheDir)) {
 				mkdir($this->cacheDir, 0777, true);
