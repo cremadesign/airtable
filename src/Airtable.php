@@ -1,11 +1,7 @@
 <?php
-
 	namespace Crema;
 	
-	use \AllowDynamicProperties;
-	
-	#[AllowDynamicProperties]
-	class Airtable {
+	class Airtable extends \stdClass {
 		public function __construct($credentials) {
 			$this->login($credentials);
 			$this->api = "https://api.airtable.com/v0";
@@ -82,7 +78,8 @@
 			return $this->recordId;
 		}
 		
-		private function refreshTableCache() {
+		// Refresh the Table Cache
+		private function refreshTables() {
 			$url = "$this->api/$this->baseId/$this->tableName?api_key=$this->apiKey&view=Grid%20view";
 			$records = json_decode($this->request($url))->records;
 			
@@ -99,14 +96,13 @@
 				return $fields;
 			}, $records);
 			
-			// Return Records
 			return json_encode($result, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES);
 		}
 		
-		private function refreshRecordCache() {
+		// Refresh the Records Cache
+		private function refreshRecords() {
 			$url = "$this->api/$this->baseId/$this->tableName/$this->recordId?api_key=$this->apiKey";
 			$record = json_decode($this->request($url));
-			
 			$fields = [];
 			
 			foreach ($record->fields as $key => $value) {
@@ -119,16 +115,11 @@
 			return json_encode($fields, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES);
 		}
 		
-		public function getTable($tableName = null) {
-			if (isset($tableName)) {
-				$this->setTableName($tableName);
-			}
-			
-			$cacheFile = "$this->cacheDir/$this->tableSlug.json";
+		private function getData($type, $cacheFile) {
 			$fileModified = @filemtime($cacheFile); // returns FALSE if file doesn't exist
 			
 			if (!$fileModified or (time() - $fileModified >= $this->cacheLife)) {
-				$result = $this->refreshTableCache();
+				$result = ($type == "table") ? $this->refreshTables() : $this->refreshRecords();
 				file_put_contents($cacheFile, $result);
 			} else {
 				$result = $this->request($cacheFile);
@@ -137,22 +128,14 @@
 			return json_decode($result, true);
 		}
 		
+		public function getTable($tableName = null) {
+			if (isset($tableName)) $this->setTableName($tableName);
+			return $this->getData("table", "$this->cacheDir/$this->tableSlug.json");
+		}
+		
 		public function getRecord($recordId = null) {
-			if (isset($recordId)) {
-				$this->setRecordId($recordId);
-			}
-			
-			$cacheFile = "$this->cacheDir/$this->tableSlug-$this->recordId.json";
-			$fileModified = @filemtime($cacheFile); // returns FALSE if file doesn't exist
-			
-			if (!$fileModified or (time() - $fileModified >= $this->cacheLife)) {
-				$result = $this->refreshRecordCache();
-				file_put_contents($cacheFile, $result);
-			} else {
-				$result = $this->request($cacheFile);
-			}
-			
-			return json_decode($result, true);
+			if (isset($recordId)) $this->setRecordId($recordId);
+			return $this->getData("record", "$this->cacheDir/$this->tableSlug-$this->recordId.json");
 		}
 	}
 ?>
