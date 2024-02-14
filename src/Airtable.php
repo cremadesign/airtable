@@ -15,16 +15,26 @@
 		
 		private function request($url) {
 			if (strpos($_SERVER["HTTP_HOST"], '.test') !== false) {
-				$context = stream_context_create([
+				$options = [
 					'ssl' => [
 						'verify_peer' => false
+					],
+					'http' => [
+						'method'  => 'GET',
+						'header' => 'Authorization: Bearer '. $this->apiKey
 					]
-				]);
-			
-				return file_get_contents($url, false, $context);
+				];
 			} else {
-				return file_get_contents($url);
+				$options = [
+					'http' => [
+						'method'  => 'GET',
+						'header' => 'Authorization: Bearer '. $this->apiKey
+					]
+				];
 			}
+			
+			$context  = stream_context_create($options);
+			return file_get_contents($url, false, $context);
 		}
 		
 		private function slugify($string, $replacement = '-') {
@@ -80,7 +90,7 @@
 		
 		// Refresh the Table Cache
 		private function refreshTables() {
-			$url = "$this->api/$this->baseId/$this->tableName?api_key=$this->apiKey&view=Grid%20view";
+			$url = "$this->api/$this->baseId/$this->tableName?view=Grid%20view";
 			$records = json_decode($this->request($url))->records;
 			
 			$result = array_map(function($record) {
