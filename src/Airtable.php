@@ -1,7 +1,9 @@
 <?php
 	namespace Crema;
 	
-	define("JSON_PRETTIER", JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES);
+	if (!defined('JSON_PRETTIER')) {
+		define('JSON_PRETTIER', JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+	}
 	
 	class Airtable extends \stdClass {
 		public function __construct($credentials) {
