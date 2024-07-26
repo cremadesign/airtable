@@ -81,7 +81,7 @@
 			
 			foreach ($records as &$record) {
 				$record = $this->remapRecord($record);
-				$record = $this->cacheAttachments($tableName, $record);
+				$record = $this->cacheAttachments($record);
 			}
 			
 			file_put_contents($cacheFile, json_encode($records, JSON_PRETTIER));
@@ -101,7 +101,7 @@
 			$url = "$this->api/$this->baseId/" . rawurlencode($tableName) . "/$recordId";
 			$record = $this->request($url);
 			$record = $this->remapRecord($record);
-			$record = $this->cacheAttachments($tableName, $record);
+			$record = $this->cacheAttachments($record);
 			
 			file_put_contents($cacheFile, json_encode($record, JSON_PRETTIER));
 			
@@ -155,20 +155,24 @@
 			return (object) $fields;
 		}
 		
-		private function cacheAttachments($tableName, $record) {
-			if (isset($record->image)) {
-				foreach ($record->image as &$attachment) {
-					$extension = pathinfo($attachment->filename, PATHINFO_EXTENSION);
-					$cacheFile = "$this->cacheDir/$this->tableSlug-{$record->id}-{$attachment->id}.$extension";
-					
-					if (!file_exists($cacheFile)) {
-						$content = file_get_contents($attachment->url);
-						file_put_contents($cacheFile, $content);
+		private function cacheAttachments($record) {
+			foreach ($record as $field => $value) {
+				if (is_array($value)) {
+					foreach ($value as &$attachment) {
+						if (isset($attachment->url) && isset($attachment->filename)) {
+							$extension = pathinfo($attachment->filename, PATHINFO_EXTENSION);
+							$cacheFile = "$this->cacheDir/$this->tableSlug-{$record->id}-{$attachment->id}.$extension";
+							
+							if (!file_exists($cacheFile)) {
+								$content = file_get_contents($attachment->url);
+								file_put_contents($cacheFile, $content);
+							}
+							
+							$attachment->url = $cacheFile;
+							$attachment->extension = $extension;
+							unset($attachment->thumbnails);
+						}
 					}
-					
-					$attachment->url = $cacheFile;
-					$attachment->extension = $extension;
-					unset($attachment->thumbnails);
 				}
 			}
 			
