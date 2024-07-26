@@ -12,7 +12,8 @@
 		'base_id' => getenv('AIRTABLE_BASE')
 	]);
 	
-	$record = $airtable->loadRecord('People', 'rec5ng53hVBkDqT4r');
+	//$record = $airtable->loadTable('Two Words');
+	$record = $airtable->loadRecord('Two Words', 'rec71aktPwbfy7GQq');
 	
 	dd($record);
 ?>

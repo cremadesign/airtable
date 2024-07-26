@@ -68,14 +68,15 @@
 		/*/
 		
 		public function loadTable($tableName) {
-			$cacheFile = "$this->cacheDir/$tableName.json";
+			$this->setTableName($tableName);
+			$cacheFile = "$this->cacheDir/$this->tableSlug.json";
 			
 			if (file_exists($cacheFile) && $this->isCacheValid($cacheFile)) {
 				return json_decode(file_get_contents($cacheFile));
 			}
 			
 			// Refresh the Table Cache
-			$url = "$this->api/$this->baseId/$tableName";
+			$url = "$this->api/$this->baseId/" . rawurlencode($tableName);
 			$records = $this->request($url)->records;
 			
 			foreach ($records as &$record) {
@@ -89,14 +90,15 @@
 		}
 		
 		public function loadRecord($tableName, $recordId) {
-			$cacheFile = "$this->cacheDir/$tableName-$recordId.json";
+			$this->setTableName($tableName);
+			$cacheFile = "$this->cacheDir/$this->tableSlug-$recordId.json";
 			
 			if (file_exists($cacheFile) && $this->isCacheValid($cacheFile)) {
 				return json_decode(file_get_contents($cacheFile));
 			}
 			
 			// Refresh the Records Cache
-			$url = "$this->api/$this->baseId/$tableName/$recordId";
+			$url = "$this->api/$this->baseId/" . rawurlencode($tableName) . "/$recordId";
 			$record = $this->request($url);
 			$record = $this->remapRecord($record);
 			$record = $this->cacheAttachments($tableName, $record);
@@ -157,14 +159,14 @@
 			if (isset($record->image)) {
 				foreach ($record->image as &$attachment) {
 					$extension = pathinfo($attachment->filename, PATHINFO_EXTENSION);
-					$filepath = "$this->cacheDir/$tableName-{$record->id}-{$attachment->id}.$extension";
+					$cacheFile = "$this->cacheDir/$this->tableSlug-{$record->id}-{$attachment->id}.$extension";
 					
-					if (!file_exists($filepath)) {
+					if (!file_exists($cacheFile)) {
 						$content = file_get_contents($attachment->url);
-						file_put_contents($filepath, $content);
+						file_put_contents($cacheFile, $content);
 					}
 					
-					$attachment->url = $filepath;
+					$attachment->url = $cacheFile;
 					$attachment->extension = $extension;
 					unset($attachment->thumbnails);
 				}
