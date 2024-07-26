@@ -1,23 +1,18 @@
 <?php
 	
 	require_once '../vendor/autoload.php';
+	require_once 'bin.php';
+	
+	loadEnv('../.env');
+	
 	use Crema\Airtable;
 	
-	$test = $_GET['test'] ?? 'table';
-	$credentials = json_decode(file_get_contents('../config.json'))->airtable;
-	$airtable = new Airtable($credentials);
+	$airtable = new Airtable([
+		'api_key' => getenv('AIRTABLE_API'),
+		'base_id' => getenv('AIRTABLE_BASE')
+	]);
 	
-	switch ($test) {
-		case 'table':
-			$response = $airtable->getTable('People');
-		break;
-		case 'record':
-			$airtable->setTableName('People');
-			$response = $airtable->getRecord('rec5ng53hVBkDqT4r');
-		break;
-	}
+	$record = $airtable->loadRecord('People', 'rec5ng53hVBkDqT4r');
 	
-	header('Content-Type: application/json');
-	echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-	
+	dd($record);
 ?>

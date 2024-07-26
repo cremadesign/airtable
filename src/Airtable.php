@@ -1,50 +1,30 @@
 <?php
 	namespace Crema;
 	
+	define("JSON_PRETTIER", JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES);
+	
 	class Airtable extends \stdClass {
 		public function __construct($credentials) {
-			$this->login($credentials);
+			$credentials = (object) $credentials;
+			
+			$this->setApiKey($credentials->api_key);
+			$this->setBaseId($credentials->base_id);
+			$this->setCacheDir('data/.cached');
+			$this->setCacheLife(14400); // 4 hours (in seconds)
+			
 			$this->api = "https://api.airtable.com/v0";
-			$this->cacheDir = 'data/.cached';
-			$this->cacheLife = '14400'; // 4 hours (in seconds)
 			
 			if (!is_dir($this->cacheDir)) {
-				mkdir($this->cacheDir, 0777, true);
+				mkdir($this->cacheDir, 0755, true);
 			}
 		}
 		
-		private function request($url) {
-			if (strpos($_SERVER["HTTP_HOST"], '.test') !== false) {
-				$options = [
-					'ssl' => [
-						'verify_peer' => false
-					],
-					'http' => [
-						'method'  => 'GET',
-						'header' => 'Authorization: Bearer '. $this->apiKey
-					]
-				];
-			} else {
-				$options = [
-					'http' => [
-						'method'  => 'GET',
-						'header' => 'Authorization: Bearer '. $this->apiKey
-					]
-				];
-			}
-			
-			$context  = stream_context_create($options);
-			return file_get_contents($url, false, $context);
+		public function setApiKey(string $apiKey): void {
+			$this->apiKey = $apiKey;
 		}
 		
-		private function slugify($string, $replacement = '-') {
-			$slug = strtolower(preg_replace('/[^A-z0-9-]+/', $replacement, $string));
-			return trim($slug, $replacement);
-		}
-		
-		public function login($credentials) {
-			$this->apiKey = $credentials->api_key;
-			$this->baseId = $credentials->base_id;
+		public function setBaseId(string $baseId): void {
+			$this->baseId = $baseId;
 		}
 		
 		public function setCacheDir(string $cacheDir): void {
@@ -55,97 +35,145 @@
 			$this->cacheLife = $cacheLife;
 		}
 		
-		public function setApiKey(string $apiKey): void {
-			$this->apiKey = $apiKey;
-		}
-		
-		public function getApiKey(): string {
-			return $this->apiKey;
-		}
-		
-		public function setBaseId(string $baseId): void {
-			$this->baseId = $baseId;
-		}
-		
-		public function getBaseId(): string {
-			return $this->baseId;
-		}
-		
 		public function setTableName(string $tableName): void {
 			$this->tableName = $tableName;
 			$this->tableSlug = $this->slugify($this->tableName);
 		}
 		
-		public function getTableName(): string {
-			return $this->tableName;
+		/*/
+			I've commented out these functions, since they aren't fully
+			integrated and I'm not sure if we actually use or need yet.
+			
+			public function setRecordId(string $recordId): void {
+				$this->recordId = $recordId;
+			}
+			
+			public function getRecordId(): string {
+				return $this->recordId;
+			}
+			
+			public function getApiKey(): string {
+				return $this->apiKey;
+			}
+			
+			public function getBaseId(): string {
+				return $this->baseId;
+			}
+			
+			public function getTableName(): string {
+				return $this->tableName;
+			}
+		/*/
+		
+		public function loadTable($tableName) {
+			$cacheFile = "$this->cacheDir/$tableName.json";
+			
+			if (file_exists($cacheFile) && $this->isCacheValid($cacheFile)) {
+				return json_decode(file_get_contents($cacheFile));
+			}
+			
+			// Refresh the Table Cache
+			$url = "$this->api/$this->baseId/$tableName";
+			$records = $this->request($url)->records;
+			
+			foreach ($records as &$record) {
+				$record = $this->remapRecord($record);
+				$record = $this->cacheAttachments($tableName, $record);
+			}
+			
+			file_put_contents($cacheFile, json_encode($records, JSON_PRETTIER));
+			
+			return $records;
 		}
 		
-		public function setRecordId(string $recordId): void {
-			$this->recordId = $recordId;
+		public function loadRecord($tableName, $recordId) {
+			$cacheFile = "$this->cacheDir/$tableName-$recordId.json";
+			
+			if (file_exists($cacheFile) && $this->isCacheValid($cacheFile)) {
+				return json_decode(file_get_contents($cacheFile));
+			}
+			
+			// Refresh the Records Cache
+			$url = "$this->api/$this->baseId/$tableName/$recordId";
+			$record = $this->request($url);
+			$record = $this->remapRecord($record);
+			$record = $this->cacheAttachments($tableName, $record);
+			
+			file_put_contents($cacheFile, json_encode($record, JSON_PRETTIER));
+			
+			return $record;
 		}
 		
-		public function getRecordId(): string {
-			return $this->recordId;
+		// Alias for old getTable function
+		public function getTable($tableName) {
+			return $this->loadTable($tableName);
 		}
 		
-		// Refresh the Table Cache
-		private function refreshTables() {
-			$url = "$this->api/$this->baseId/$this->tableName?view=Grid%20view";
-			$records = json_decode($this->request($url))->records;
-			
-			$result = array_map(function($record) {
-				$fields = [];
-			
-				foreach ($record->fields as $key => $value) {
-					$fields[$this->slugify($key, '_')] = $value;
-				}
-			
-				$fields['id'] = $record->id;
-				$fields['created'] = $record->createdTime;
-			
-				return $fields;
-			}, $records);
-			
-			return json_encode($result, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES);
+		// Alias for old getRecord function
+		public function getRecord($recordId) {
+			return $this->loadRecord($this->tableSlug, $recordId);
 		}
 		
-		// Refresh the Records Cache
-		private function refreshRecords() {
-			$url = "$this->api/$this->baseId/$this->tableName/$this->recordId?api_key=$this->apiKey";
-			$record = json_decode($this->request($url));
-			$fields = [];
+		private function slugify($text) {
+			return strtolower(trim(preg_replace('/[^A-z0-9-]+/', '-', $text), '-'));
+		}
+		
+		private function request($url) {
+			$ch = curl_init($url);
 			
-			foreach ($record->fields as $key => $value) {
+			curl_setopt_array($ch, [
+				CURLOPT_RETURNTRANSFER => true,
+				CURLOPT_HTTPHEADER => [
+					"Authorization: Bearer $this->apiKey"
+				]
+			]);
+			
+			$response = curl_exec($ch);
+			curl_close($ch);
+			
+			return json_decode($response);
+		}
+		
+		private function remapRecord($record) {
+			if (!isset($record->id) || !isset($record->createdTime) || !isset($record->fields)) {
+				throw new \UnexpectedValueException('Record is missing expected properties');
+			}
+			
+			$fields = [
+				'id' => $record->id,
+				'created' => $record->createdTime
+			];
+			
+			foreach ($record->fields as $key => &$value) {
 				$fields[$this->slugify($key, '_')] = $value;
 			}
 			
-			$fields['id'] = $record->id;
-			$fields['created'] = $record->createdTime;
-			
-			return json_encode($fields, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES);
+			return (object) $fields;
 		}
 		
-		private function getData($type, $cacheFile) {
-			$fileModified = @filemtime($cacheFile); // returns FALSE if file doesn't exist
-			
-			if (!$fileModified or (time() - $fileModified >= $this->cacheLife)) {
-				$result = ($type == "table") ? $this->refreshTables() : $this->refreshRecords();
-				file_put_contents($cacheFile, $result);
-			} else {
-				$result = $this->request($cacheFile);
+		private function cacheAttachments($tableName, $record) {
+			if (isset($record->image)) {
+				foreach ($record->image as &$attachment) {
+					$extension = pathinfo($attachment->filename, PATHINFO_EXTENSION);
+					$filepath = "$this->cacheDir/$tableName-{$record->id}-{$attachment->id}.$extension";
+					
+					if (!file_exists($filepath)) {
+						$content = file_get_contents($attachment->url);
+						file_put_contents($filepath, $content);
+					}
+					
+					$attachment->url = $filepath;
+					$attachment->extension = $extension;
+					unset($attachment->thumbnails);
+				}
 			}
 			
-			return json_decode($result, true);
+			return $record;
 		}
 		
-		public function getTable($tableName = null) {
-			if (isset($tableName)) $this->setTableName($tableName);
-			return $this->getData("table", "$this->cacheDir/$this->tableSlug.json");
-		}
-		
-		public function getRecord($recordId = null) {
-			if (isset($recordId)) $this->setRecordId($recordId);
-			return $this->getData("record", "$this->cacheDir/$this->tableSlug-$this->recordId.json");
+		private function isCacheValid($cacheFile) {
+			return (time() - filemtime($cacheFile)) < $this->cacheLife;
 		}
 	}
+
 ?>

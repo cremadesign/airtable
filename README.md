@@ -4,34 +4,60 @@ by Stephen Ginn at Crema Design Studio
 This PHP script checks for the existence of a cache file. If one doesn't
 exist, it connects to Airtable and saves a new one.
 
-### Installation
+## Installation
 You can install the package via composer:
 ```
 composer config repositories.crema/airtable git https://github.com/cremadesign/airtable
 composer require crema/airtable:@dev
 ```
 
-Define airtables account information in config.json:
+We'd suggest storing your account info in a .env file outside your public folder
 ```
-{
-	"airtable": {
-		"api_key": "YOUR_API_KEY",
-		"base_id": "YOUR_BASE_ID"
-	}
-}
+AIRTABLE_API = YOUR_API_KEY
+AIRTABLE_BASE = YOUR_BASE_ID
 ```
 
-### Usage
-Add this code to your PHP file:
+## Usage
+
+### Initialize
 ```php
 require_once '../vendor/autoload.php';
 
 use Crema\Airtable;
 
-$credentials = json_decode(file_get_contents('../config.json'))->airtable;
-$airtable = new AirTable($credentials);
-$records = $airtable->getTable('YOUR_TABLE_NAME');
+$airtable = new AirTable([
+	'api_key' => getenv('AIRTABLE_API'),
+	'base_id' => getenv('AIRTABLE_BASE')
+]);
+```
 
+#### Get Entire Table
+```php
+$data = $airtable->loadTable('TABLE_NAME');
 header('Content-Type: application/json');
-echo json_encode($records, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+```
+
+#### Get Single Record
+```
+$data = $airtable->loadRecord('TABLE_NAME', 'RECORD_ID');
+header('Content-Type: application/json');
+echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+```
+
+## Usage (Compatibility Layer)
+
+#### Get Entire Table
+```php
+$data = $airtable->getTable('TABLE_NAME');
+header('Content-Type: application/json');
+echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+```
+
+#### Get Single Record
+```php
+$airtable->setTableName('TABLE_NAME');
+$data = $airtable->getRecord('RECORD_ID');
+header('Content-Type: application/json');
+echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 ```
