@@ -42,80 +42,42 @@
 			$this->tableSlug = $this->slugify($this->tableName);
 		}
 		
-		/*/
-			I've commented out these functions, since they aren't fully
-			integrated and I'm not sure if we actually use or need yet.
-			
-			public function setRecordId(string $recordId): void {
-				$this->recordId = $recordId;
-			}
-			
-			public function getRecordId(): string {
-				return $this->recordId;
-			}
-			
-			public function getApiKey(): string {
-				return $this->apiKey;
-			}
-			
-			public function getBaseId(): string {
-				return $this->baseId;
-			}
-			
-			public function getTableName(): string {
-				return $this->tableName;
-			}
-		/*/
-		
-		public function loadTable($tableName) {
+		public function loadData($tableName, $recordId = null) {
 			$this->setTableName($tableName);
-			$cacheFile = "$this->cacheDir/$this->tableSlug.json";
+			$cacheFile = $recordId ? "$this->cacheDir/$this->tableSlug-$recordId.json" : "$this->cacheDir/$this->tableSlug.json";
 			
 			if (file_exists($cacheFile) && $this->isCacheValid($cacheFile)) {
 				return json_decode(file_get_contents($cacheFile));
 			}
 			
-			// Refresh the Table Cache
+			// Refresh the Table or Record Cache
 			$url = "$this->api/$this->baseId/" . rawurlencode($tableName);
-			$records = $this->request($url)->records;
 			
-			foreach ($records as &$record) {
+			if ($recordId) {
+				$record = $this->request("$url/$recordId");
 				$record = $this->remapRecord($record);
-				$record = $this->cacheAttachments($record);
+				$record = $this->cacheAttachments([$record])[0];
+				file_put_contents($cacheFile, json_encode($record, JSON_PRETTIER));
+				return $record;
+			} else {
+				$records = $this->request($url)->records;
+				foreach ($records as &$record) {
+					$record = $this->remapRecord($record);
+				}
+				$records = $this->cacheAttachments($records);
+				file_put_contents($cacheFile, json_encode($records, JSON_PRETTIER));
+				return $records;
 			}
-			
-			file_put_contents($cacheFile, json_encode($records, JSON_PRETTIER));
-			
-			return $records;
-		}
-		
-		public function loadRecord($tableName, $recordId) {
-			$this->setTableName($tableName);
-			$cacheFile = "$this->cacheDir/$this->tableSlug-$recordId.json";
-			
-			if (file_exists($cacheFile) && $this->isCacheValid($cacheFile)) {
-				return json_decode(file_get_contents($cacheFile));
-			}
-			
-			// Refresh the Records Cache
-			$url = "$this->api/$this->baseId/" . rawurlencode($tableName) . "/$recordId";
-			$record = $this->request($url);
-			$record = $this->remapRecord($record);
-			$record = $this->cacheAttachments($record);
-			
-			file_put_contents($cacheFile, json_encode($record, JSON_PRETTIER));
-			
-			return $record;
 		}
 		
 		// Alias for old getTable function
 		public function getTable($tableName) {
-			return $this->loadTable($tableName);
+			return $this->loadData($tableName);
 		}
 		
 		// Alias for old getRecord function
 		public function getRecord($recordId) {
-			return $this->loadRecord($this->tableSlug, $recordId);
+			return $this->loadData($this->tableSlug, $recordId);
 		}
 		
 		private function slugify($text) {
@@ -155,28 +117,84 @@
 			return (object) $fields;
 		}
 		
-		private function cacheAttachments($record) {
-			foreach ($record as $field => $value) {
-				if (is_array($value)) {
-					foreach ($value as &$attachment) {
-						if (isset($attachment->url) && isset($attachment->filename)) {
-							$extension = pathinfo($attachment->filename, PATHINFO_EXTENSION);
-							$cacheFile = "$this->cacheDir/$this->tableSlug-{$record->id}-{$attachment->id}.$extension";
-							
-							if (!file_exists($cacheFile)) {
-								$content = file_get_contents($attachment->url);
-								file_put_contents($cacheFile, $content);
+		private function cacheAttachments($records) {
+			$mh = curl_multi_init();
+			$handles = [];
+			$cacheFiles = [];
+			$batchSize = 10;
+			
+			foreach ($records as &$record) {
+				foreach ($record as $field => $value) {
+					if (is_array($value)) {
+						foreach ($value as &$attachment) {
+							if (isset($attachment->url) && isset($attachment->filename)) {
+								$extension = pathinfo($attachment->filename, PATHINFO_EXTENSION);
+								$cacheFile = "$this->cacheDir/$this->tableSlug-{$record->id}-{$attachment->id}.$extension";
+								
+								$cacheFiles[$attachment->url] = $cacheFile;
+								
+								if (!file_exists($cacheFile)) {
+									$ch = curl_init($attachment->url);
+									curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+									curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+									curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+									$handles[$attachment->url] = $ch;
+								} else {
+									$attachment->url = $cacheFile;
+									$attachment->extension = $extension;
+									unset($attachment->thumbnails);
+								}
 							}
-							
-							$attachment->url = $cacheFile;
-							$attachment->extension = $extension;
-							unset($attachment->thumbnails);
 						}
 					}
 				}
 			}
 			
-			return $record;
+			$handleChunks = array_chunk($handles, $batchSize, true);
+			
+			foreach ($handleChunks as $handleChunk) {
+				foreach ($handleChunk as $url => $ch) {
+					curl_multi_add_handle($mh, $ch);
+				}
+				
+				$running = null;
+				do {
+					curl_multi_exec($mh, $running);
+					curl_multi_select($mh);
+				} while ($running > 0);
+				
+				foreach ($handleChunk as $url => $ch) {
+					$content = curl_multi_getcontent($ch);
+					if ($content !== false) {
+						file_put_contents($cacheFiles[$url], $content);
+					}
+					curl_multi_remove_handle($mh, $ch);
+				}
+			}
+			
+			curl_multi_close($mh);
+			
+			// Update attachment URLs and remove thumbnails
+			foreach ($records as &$record) {
+				foreach ($record as $field => $value) {
+					if (is_array($value)) {
+						foreach ($value as &$attachment) {
+							if (isset($attachment->url) && isset($attachment->filename)) {
+								$extension = pathinfo($attachment->filename, PATHINFO_EXTENSION);
+								$cacheFile = "$this->cacheDir/$this->tableSlug-{$record->id}-{$attachment->id}.$extension";
+								
+								if (file_exists($cacheFile)) {
+									$attachment->url = $cacheFile;
+									$attachment->extension = $extension;
+									unset($attachment->thumbnails);
+								}
+							}
+						}
+					}
+				}
+			}
+			
+			return $records;
 		}
 		
 		private function isCacheValid($cacheFile) {

@@ -33,14 +33,14 @@ $airtable = new AirTable([
 
 #### Get Entire Table
 ```php
-$data = $airtable->loadTable('TABLE_NAME');
+$data = $airtable->loadData('TABLE_NAME');
 header('Content-Type: application/json');
 echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 ```
 
 #### Get Single Record
 ```
-$data = $airtable->loadRecord('TABLE_NAME', 'RECORD_ID');
+$data = $airtable->loadData('TABLE_NAME', 'RECORD_ID');
 header('Content-Type: application/json');
 echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 ```
@@ -61,3 +61,6 @@ $data = $airtable->getRecord('RECORD_ID');
 header('Content-Type: application/json');
 echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 ```
+
+## Known Issues
+- Large tables with lots of images may cause page loads to fail due to the 30 second maximum execution time of PHP. However, this issue can be bypassed by reloading the page, since it's not starting from scratch.
