@@ -42,7 +42,7 @@
 			$this->tableSlug = $this->slugify($this->tableName);
 		}
 		
-		public function loadData($tableName, $recordId = null) {
+		public function loadData($tableName, $recordId = null, $view = null) {
 			$this->setTableName($tableName);
 			$cacheFile = $recordId ? "$this->cacheDir/$this->tableSlug-$recordId.json" : "$this->cacheDir/$this->tableSlug.json";
 			
@@ -52,6 +52,10 @@
 			
 			// Refresh the Table or Record Cache
 			$url = "$this->api/$this->baseId/" . rawurlencode($tableName);
+			
+			if ($view) {
+				$url .= "?view=" . rawurlencode($view);
+			}
 			
 			if ($recordId) {
 				$record = $this->request("$url/$recordId");
@@ -71,8 +75,8 @@
 		}
 		
 		// Alias for old getTable function
-		public function getTable($tableName) {
-			return $this->loadData($tableName);
+		public function getTable($tableName, $view = null) {
+			return $this->loadData($tableName, null, $view);
 		}
 		
 		// Alias for old getRecord function
